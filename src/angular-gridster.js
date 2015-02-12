@@ -38,8 +38,8 @@
 		}
 	})
 
-	.controller('GridsterCtrl', ['gridsterConfig', '$timeout',
-		function(gridsterConfig, $timeout) {
+	.controller('GridsterCtrl', ['gridsterConfig', '$timeout', 'multiGridsterItemManager',
+		function(gridsterConfig, $timeout, multiGridsterItemManager) {
 
 			var gridster = this;
 
@@ -526,6 +526,58 @@
 				return Math.round(pixels / this.curColWidth);
 			};
 
+			this.calcDistance = function(x,y){
+				var rect = gridster.getOffset();
+				var xDistance = 0;
+				var yDistance = 0;
+
+				if (x < rect.left){
+					xDistance = rect.left - x;
+				} else if (x > rect.right){
+					xDistance = x - rect.right;
+				}
+
+				if (y < rect.top){
+					yDistance = rect.top - y;
+				} else if (y > rect.bottom){
+					yDistance = y - rect.bottom;
+				}
+
+				var zIndex;
+				if(gridster.$elem[0].style.zIndex){
+					zIndex = gridster.$elem[0].style.zIndex;
+				} else {
+					zIndex = 0;
+				}
+
+				return {
+					distance: Math.pow(xDistance, 2) + Math.pow(yDistance, 2),
+					z: zIndex
+				};
+			}
+
+			this.getOffset = function(){
+				var rect = this.$elem[0].getBoundingClientRect();
+				var bodyRect = document.body.getBoundingClientRect();
+
+				return {
+					top: rect.top - bodyRect.top,
+					bottom: rect.bottom - bodyRect.top,
+					left: rect.left - bodyRect.left,
+					right: rect.right - bodyRect.left
+				}
+
+			}
+
+			multiGridsterItemManager.subscribe('default', function(elem){ 
+				elem.oldRow = null;
+				elem.oldCol = null;
+				gridster.putItem(elem);
+				gridster.movingItem = elem;
+				elem.gridster = gridster;
+			}, this.calcDistance, gridster);
+
+
 			// unified input handling
 			// adopted from a msdn blogs sample
 			this.unifiedInput = function(target, startEvent, moveEvent, endEvent) {
@@ -874,6 +926,8 @@
 					return function(scope, $elem, attrs, gridster) {
 						gridster.loaded = false;
 
+						gridster.$elem = $elem;
+
 						scope.gridsterClass = function() {
 							return {
 								gridster: true,
@@ -969,6 +1023,7 @@
 						scope.$watch('gridster.gridHeight', updateHeight);
 
 						scope.$watch('gridster.movingItem', function() {
+							console.log("moving");
 							gridster.updateHeight(gridster.movingItem ? gridster.movingItem.sizeY : 0);
 						});
 
@@ -1069,6 +1124,7 @@
 
 		this.isMoving = function() {
 			return this.gridster.movingItem === this;
+			console.log('hoooo');
 		};
 
 		/**
@@ -1220,8 +1276,8 @@
 
 	})
 
-	.factory('GridsterDraggable', ['$document', '$timeout', '$window',
-		function($document, $timeout, $window) {
+	.factory('GridsterDraggable', ['$document', '$timeout', '$window', 'multiGridsterItemManager',
+		function($document, $timeout, $window, gridManager) {
 			function GridsterDraggable($el, scope, gridster, item, itemOptions) {
 
 				var elmX, elmY, elmW, elmH,
@@ -1304,7 +1360,7 @@
 
 					var dX = diffX,
 						dY = diffY;
-					if (elmX + dX < minLeft) {
+					/*if (elmX + dX < minLeft) {
 						diffX = minLeft - elmX;
 						mOffX = dX - diffX;
 					} else if (elmX + elmW + dX > maxLeft) {
@@ -1318,7 +1374,7 @@
 					} else if (elmY + elmH + dY > maxTop) {
 						diffY = maxTop - elmY - elmH;
 						mOffY = dY - diffY;
-					}
+					}*/
 					elmX += diffX;
 					elmY += diffY;
 
@@ -1369,6 +1425,35 @@
 
 					var itemsInTheWay = gridster.getItems(row, col, item.sizeX, item.sizeY, item);
 					var hasItemsInTheWay = itemsInTheWay.length !== 0;
+
+					var x = event.pageX,
+						y = event.pageY;
+
+
+					var distance = gridster.calcDistance(x,y);
+
+					var newGridster = gridManager.checkPosition(x, y, distance.z, distance.distance, 'default', item);
+					if (newGridster) {
+
+						var oldOffset = gridster.getOffset();
+						var newOffset = newGridster.getOffset();
+
+						elmX += oldOffset.left - newOffset.left;
+						elmY += oldOffset.top - newOffset.top;
+
+						$el.css({
+							'top': elmY + 'px',
+							'left': elmX + 'px'
+						});
+
+
+						gridster.removeItem(item);
+						gridster.movingItem = null;
+
+						gridster = newGridster;
+						newGridster.$elem[0].appendChild(item.$element[0]);
+						return;
+					};
 
 					if (gridster.swapping === true && hasItemsInTheWay) {
 						var boundingBoxItem = gridster.getBoundingBox(itemsInTheWay);
@@ -1428,6 +1513,7 @@
 					if (hasCallback || oldRow !== item.row || oldCol !== item.col) {
 						scope.$apply(function() {
 							if (hasCallback) {
+								console.log('dragstart');
 								gridster.draggable.drag(event, $el, itemOptions);
 							}
 						});
@@ -1992,6 +2078,73 @@
 					});
 				}
 			};
+		}
+	])
+
+	.service('multiGridsterItemManager', [
+		function() {
+			this.channels = [];
+
+			this.subscribe = function(channel, addFunc, calcPositionFunc, gridster) {
+				var channel = this.channels.filter(function(channel) {
+					return channel.name === name
+				})[0];
+
+				if (!channel) {
+					this.channels.push({
+						name : name,
+							subscribers : [{
+								add: addFunc,
+								calcPosition: calcPositionFunc,
+								gridster: gridster
+							}]
+					});
+				} else {
+					channel.subscribers.push({
+						add: addFunc,
+						calcPosition: calcPositionFunc,
+						gridster: gridster
+					});
+				}
+			}
+
+			this.checkPosition = function(x, y, currentZ, currentDistance, channel, el) {
+				var minBy = function(arr, lambda) {
+					var lambdaFn;
+
+					if (typeof(lambda) === "function") {
+						lambdaFn = lambda;
+					} else {
+						lambdaFn = function(x) {
+							return x[lambda];
+						}
+					}
+					var mapped = arr.map(lambdaFn);
+					var minValue = Math.min.apply(Math, mapped);
+					return arr[mapped.indexOf(minValue)];
+				}
+
+				var channel = this.channels.filter(function(channel) {
+					return channel.name === name
+				})[0];
+
+				if (!channel) {
+					return false;
+				}
+
+				var minPositionSubscriber = minBy(channel.subscribers, function(sub) {
+					return sub.calcPosition(x, y).distance;
+				})
+
+				var minPosition = minPositionSubscriber.calcPosition(x, y);
+
+				if (minPosition.distance < currentDistance || (minPosition.distance === currentDistance && minPosition.z > currentZ)) {
+					minPositionSubscriber.add(el);
+					return minPositionSubscriber.gridster;
+				} else {
+					return false;
+				}
+			}
 		}
 	])
 

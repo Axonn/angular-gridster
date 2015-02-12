@@ -37,7 +37,7 @@
 				<p>
 					Each item provides its own dimensions and position using the standard fields: { row: row, col: col, sizeX: sizeX, sizeY: sizeY }.
 				</p>
-				<div gridster="gridsterOpts">
+				<div gridster="gridsterOpts" class="1uno">
 					<ul>
 						<li gridster-item="item" ng-repeat="item in standardItems">
 							<div class="remove-item" ng-click="removeItem($index)"> x </div>
@@ -54,25 +54,9 @@
 				<p>
 					Each item provides its own dimensions but with custom fields defined using customItemMap: { position: [row, col], size: { x: sizeX, y: sizeY }}
 				</p>
-				<div gridster="gridsterOpts">
+				<div gridster="gridsterOpts" class="2duo">
 					<ul>
 						<li gridster-item="customItemMap" ng-repeat="item in customItems">
-							<input type="text" integer ng-model="item.position[0]" size="1" />,
-							<input type="text" integer ng-model="item.position[1]" size="1" />
-							<br />
-							<input type="text" integer ng-model="item.size.x" size="1" />x
-							<input type="text" integer ng-model="item.size.y" size="1" />
-						</li>
-					</ul>
-				</div>
-
-				<h2>Custom Items2</h2>
-				<p>
-					Each item provides its own dimensions but with custom fields indicated using html attributes: row, col, sizex, sizey. Size can also be in the form of data-size-x or data-sizex.
-				</p>
-				<div gridster="gridsterOpts">
-					<ul>
-						<li gridster-item row="item.position[0]" col="item.position[1]" size-x="item.size.x" size-y="item.size.y" ng-repeat="item in customItems">
 							<input type="text" integer ng-model="item.position[0]" size="1" />,
 							<input type="text" integer ng-model="item.position[1]" size="1" />
 							<br />
@@ -86,7 +70,7 @@
 				<p>
 					Each item stores the standard options as an object within itself: { grid: {row: row, col: col, sizeX: sizeX, sizeY: sizeY }}
 				</p>
-				<div gridster="gridsterOpts">
+				<div gridster="gridsterOpts" class="4fouro">
 					<ul>
 						<li gridster-item="item.grid" ng-repeat="item in emptyItems">
 							<input type="text" integer ng-model="item.grid.row" size="1" />,

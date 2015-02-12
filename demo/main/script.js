@@ -22,7 +22,7 @@ angular.module('app')
 		pushing: true,
 		floating: true,
 		draggable: {
-			enabled: false
+			enabled: true
 		},
 		resizable: {
 			enabled: false,
